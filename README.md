@@ -15,3 +15,8 @@ Wooded neighborhoods, lovely views of lake, city and mountains... and a nice lit
 ##Conclusions
 
 Stunning insights? Women may run like girls, but most are still are faster than me. I wish I ran like a 79 year old.
+
+
+##Disclaimers
+
+Neither the data, map, nor the logo are mine. Apologies for their appropriation.

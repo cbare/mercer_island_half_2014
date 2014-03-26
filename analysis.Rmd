@@ -7,7 +7,7 @@ Mercer island is situated in the southern end of Lake Washington east of Seattle
 
 For runners, a nice way to take in the lake, mountain and city views is the [Mercer Island Half](http://mercerislandhalf.com/). I ran it this year and had a great time. And, everyone's favorite way to relax after a nice run is statistics, right?
 
-The [results](http://onlineraceresults.com/race/view_race.php?race_id=38083&relist_record_type=result&lower_bound=0&upper_bound=2028&use_previous_sql=1&group_by=default#racetop) for the race are available online, requiring just a little munging to get in shape. I cooked up a little [python script]() to do that.
+The [results](http://onlineraceresults.com/race/view_race.php?race_id=38083&relist_record_type=result&lower_bound=0&upper_bound=2028&use_previous_sql=1&group_by=default#racetop) for the race are available online, requiring just a little munging to get in shape. I cooked up a little [python script](https://github.com/cbare/mercer_island_half_2014/blob/master/read_cut_n_paste.py) to do that.
 
 ```{r}
 results <- read.table('data/mercer_island_half_2014_results.txt',
