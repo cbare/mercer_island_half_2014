@@ -1,0 +1,178 @@
+Mercer Island Half
+========================================================
+
+![Mercer Island Half](mercer_half_2014_stroke.png)
+
+Mercer island is situated in the southern end of Lake Washington east of Seattle and southwest of Bellevue, featuring wooded neighborhoods and pricey lakefront properties. The loop around the island is a popular biking route, and the bike lanes on the I-90 bridge mean you don't have to drive to get there.
+
+For runners, a nice way to take in the lake, mountain and city views is the [Mercer Island Half](http://mercerislandhalf.com/). I ran it this year and had a great time. And, everyone's favorite way to relax after a nice run is statistics, right?
+
+The [results](http://onlineraceresults.com/race/view_race.php?race_id=38083&relist_record_type=result&lower_bound=0&upper_bound=2028&use_previous_sql=1&group_by=default#racetop) for the race are available online, requiring just a little munging to get in shape. I cooked up a little [python script]() to do that.
+
+```{r}
+results <- read.table('data/mercer_island_half_2014_results.txt',
+                      sep='\t',
+                      stringsAsFactors=FALSE,
+                      quote='',
+                      header=TRUE)
+
+## and a little more munging...
+results$SEX <- as.factor(results$SEX)
+results$AGE <- as.integer(results$AGE)
+results$DIVISION <- as.factor(results$DIVISION)
+results$minutes <- matrix(as.integer(unlist(strsplit(results$TIME, ':'))), ncol=3, byrow=TRUE) %*% c(60, 1, 1/60)
+```
+
+There were 2028 runners, including 1056 men and 972 women. We also have age for all runners except of one of the men, who has been left out where necessary.
+
+Congrats to the winner, John Ricardi, who finished in 68:30 at a pace of 5:14 per mile. That's fast! Let's see how the rest of us did (with the green dashed line marking 2 hours):
+
+```{r fig.width=6, fig.height=5}
+library(ggplot2)
+p <- ggplot(results, aes(minutes))
+p + geom_histogram(aes(y = ..density..), binwidth=9, colour='#999999', fill='#aaaaaa') + geom_density(colour='blue') + geom_vline(xintercept = 120, colour="dark green", linetype = "longdash")
+```
+
+## Boys vs girls
+
+```{r fig.width=6, fig.height=5}
+p <- ggplot(results, aes(minutes))
+p + geom_density(aes(colour=SEX, fill=SEX, alpha=0.3))
+```
+
+```{r fig.width=6, fig.height=5}
+p <- ggplot(results, aes(SEX, minutes))
+p + geom_boxplot(aes(colour=SEX, fill=SEX, alpha=0.3))
+```
+
+## Divisions
+
+The organizers split the field into divisions by gender and at 5 year increments in age. Apparently a 79 year old ran, along with a single kid at each of the ages of 8, 9 and 11 years, two 12 year olds and a bunch of 13 and 14 year olds all lumped into the 14 and under division.
+
+```{r fig.width=10, fig.height=7}
+p <- ggplot(results[results$SEX=='M' & !is.na(results$AGE),], aes(DIVISION, minutes))
+p <- p + geom_boxplot(aes(fill=DIVISION))
+p <- p + stat_summary(fun.data = function(x) return(data.frame(y=62,label=length(x))), geom = "text")
+p <- p + stat_summary(fun.data = function(x) return(data.frame(y=median(x)+3,label=round(median(x)))), geom = "text")
+p <- p + annotate("text",x=2,y=67,label="#observations")
+p + ggtitle(sprintf("Time to run the Mercer Island Half Marathon (%d Men)", sum(results$SEX=='M' & !is.na(results$AGE))))
+```
+
+```{r fig.width=10, fig.height=7}
+p <- ggplot(results[results$SEX=='F' & !is.na(results$AGE),], aes(DIVISION, minutes))
+p <- p + geom_boxplot(aes(fill=DIVISION))
+p <- p + stat_summary(fun.data = function(x) return(data.frame(y=62,label=length(x))), geom = "text")
+p <- p + stat_summary(fun.data = function(x) return(data.frame(y=median(x)+3,label=round(median(x)))), geom = "text")
+p <- p + annotate("text",x=2,y=67,label="#observations")
+p + ggtitle(sprintf("Time to run the Mercer Island Half Marathon (%d Women)", sum(results$SEX=='F' & !is.na(results$AGE))))
+```
+
+Runners seem to hold up fairly well with age, but there does appear to be a trend towards slowing down with age. Let's see if we can investigate that a bit more. This ball of mud isn't going to help us much:
+
+```{r fig.width=5, fig.height=5}
+plot(minutes~jitter(AGE, amount=0.5), data=na.omit(results),
+     xlab='age', main='Running time by age', col='#99999980')
+fit = smooth.spline(na.omit(results)$AGE, na.omit(results)$minutes, df = 5)
+lines(fit, col='red')
+```
+
+There are so many factors that maybe the effect of age is getting lost. Maybe if we aggregated over people at each age, we could see a clearer pattern. Let's define a  function to help us do that.
+
+```{r}
+## Summarize using the function f runners of each unique age
+summarize_by_age <- function(results, f) {
+  as.data.frame(
+    do.call(
+      rbind,
+      lapply(sort(unique(results$AGE)), function(age) {
+        c(age=age, minutes=f(results$minutes[results$AGE==age]))
+      })))
+}
+```
+
+## The three M's
+
+Mean, median and min all more-or-less agree on a U shaped trend, with much higher variance at either extreme. Age seems to effect the average running time surprisingly little up thought age 60 or so. Same story with the median. But, the fastest runners at each age show clearer pattern.
+
+```{r fig.width=10, fig.height=5}
+old.pars <- par(mfrow=c(1,3))
+plot(summarize_by_age(na.omit(results), mean), main="Mean")
+plot(summarize_by_age(na.omit(results), median), main="Median")
+plot(summarize_by_age(na.omit(results), min), main="Min")
+par(old.pars)
+```
+
+## The decline of the fastest
+
+To look at the fastest runners at each age in a bit more detail, I fit a smoothed spline, like they taught me in the [Statistical Learning class](http://digitheadslabnotebook.blogspot.com/2014/01/online-class-on-statistical-learning.html) (unless I got it wrong, that is), and bootstrapped up a 2 standard error confidence band. Here's what that looked like:
+
+```{r fig.width=10, fig.height=5}
+fastest <- summarize_by_age(na.omit(results[results$SEX=='M',]), min)
+plot(fastest$age, fastest$minutes, typ='n',
+     xlab='age', ylab='minutes',
+     xlim=c(8,80), ylim=c(60,200),
+     main='Influence of age on fastest 1/2 marathon times (Men)')
+
+library(splines)
+fit = smooth.spline(fastest$age, fastest$minutes, df = 5)
+
+bootstraps <- list()
+for (i in 1:1000) {
+  bootstrap <- sample(1:nrow(fastest), nrow(fastest), replace=T)
+  fit.boot <- smooth.spline(fastest$age[bootstrap], fastest$minutes[bootstrap], df = 5)
+  predicted <- predict(fit.boot, 8:80)
+  bootstraps[[i]] <- predicted$y
+  lines(predicted, col = "#ccd0ff10", lwd = 2)
+}
+points(fastest$age, fastest$minutes)
+lines(fit, col = "#0030cc", lwd = 2)
+
+SBS <- do.call(rbind, bootstraps)
+se.band.upper <- predict(fit, 8:80)$y + 2*apply(SBS, 2, sd)
+lines(8:80, se.band.upper, lty='dashed', col='#aaaaaa')
+
+se.band.lower <- predict(fit, 8:80)$y - 2*apply(SBS, 2, sd)
+lines(8:80, se.band.lower, lty='dashed', col='#aaaaaa')
+```
+
+With similar code, here's the same plot for the ladies:
+
+```{r fig.width=10, fig.height=5, echo=FALSE}
+fastest <- summarize_by_age(na.omit(results[results$SEX=='F',]), min)
+plot(fastest$age, fastest$minutes, typ='n',
+     xlab='age', ylab='minutes',
+     xlim=c(8,80), ylim=c(60,200),
+     main='Influence of age on fastest 1/2 marathon times (Women)')
+
+fit = smooth.spline(fastest$age, fastest$minutes, df = 5)
+
+bootstraps <- list()
+for (i in 1:1000) {
+  bootstrap <- sample(1:nrow(fastest), nrow(fastest), replace=T)
+  fit.boot <- smooth.spline(fastest$age[bootstrap], fastest$minutes[bootstrap], df = 5)
+  predicted <- predict(fit.boot, 8:80)
+  bootstraps[[i]] <- predicted$y
+  lines(predicted, col = "#FFdddd10", lwd = 2)
+}
+points(fastest$age, fastest$minutes)
+lines(fit, col = "#FF0080", lwd = 2)
+
+SBS <- do.call(rbind, bootstraps)
+se.band.upper <- predict(fit, 8:80)$y + 2*apply(SBS, 2, sd)
+lines(8:80, se.band.upper, lty='dashed', col='#aaaaaa')
+
+se.band.lower <- predict(fit, 8:80)$y - 2*apply(SBS, 2, sd)
+lines(8:80, se.band.lower, lty='dashed', col='#aaaaaa')
+```
+
+Now, don't go pointing out that I could have done roughly the same thing with this little bit of [ggplot](http://ggplot2.org/) code.
+
+```{r fig.width=10, fig.height=5}
+ggplot(fastest, aes(age, minutes)) + geom_point() + geom_smooth()
+```
+
+## The finish
+
+So how would we interpret the results? First off, this analysis is just for fun on a small data set, so don't take it too seriously. But, it's at least plausible that we see the effect of aging most clearly in the fastest runners because they've got everything else fairly close to optimal. Whereas the variation within an age group could arise from any number of causes besides age: training, fitness, weight, biomechanics, diet, injuries, etc. So, if you've got all that dialed in, age becomes a factor. For the rest of us slackers, it's more to do with latent variables like desk or couch time and burrito intake.
+
+Oh, and how did _I_ do, you ask? 1:56:00, or just under 9 minute miles. I'm normally pretty pokey, so I'm happy about it. I've now spent longer fooling around with the data than I spent running. What a _goober_.
